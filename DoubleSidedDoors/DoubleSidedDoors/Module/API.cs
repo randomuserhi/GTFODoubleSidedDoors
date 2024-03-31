@@ -30,8 +30,8 @@ namespace API {
         public static void Log(object data) {
             logger.LogDebug(Format(Module.Name, data));
         }
-        public static void Debug(object data) {
-            if (ConfigManager.Debug) Log(data);
+        public static void Debug(object data, bool force = false) {
+            if (ConfigManager.Debug || force) Log(data);
         }
         public static void Warn(object data) => logger.LogWarning(Format(Module.Name, data));
         public static void Error(object data) => logger.LogError(Format(Module.Name, data));

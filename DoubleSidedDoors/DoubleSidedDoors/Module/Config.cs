@@ -17,8 +17,11 @@ namespace DoubleSidedDoors.BepInEx {
                 false,
                 "Enables debug messages when true.");
 
-            FileInfo[] files = Directory.CreateDirectory("./BepInEx/plugins/DoubleSidedDoors").GetFiles();
+            DirectoryInfo dir = Directory.CreateDirectory(Path.Combine(Paths.PluginPath, "DoubleSidedDoors"));
+            FileInfo[] files = dir.GetFiles();
+            APILogger.Debug($"Searching: {dir.FullName}", true);
             foreach (FileInfo fileInfo in files) {
+                APILogger.Debug($"Found: {fileInfo.FullName}", true);
                 string extension = fileInfo.Extension;
                 bool flag = extension.Equals(".json", StringComparison.InvariantCultureIgnoreCase);
                 bool flag2 = extension.Equals(".jsonc", StringComparison.InvariantCultureIgnoreCase);
