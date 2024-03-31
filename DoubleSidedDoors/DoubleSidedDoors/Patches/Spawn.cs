@@ -13,7 +13,7 @@ namespace DoubleSidedDoors {
 
     public sealed class DoorIdentifier {
         public int To { get; set; }
-        public int From { get; set; }
+        public int From { get; set; } = -1;
     }
 }
 
@@ -40,7 +40,7 @@ namespace DoubleSidedDoors.Patches {
         private static bool reverse(uint layerId, int fromAlias, int toAlias) {
             bool result = false;
             if (data.ContainsKey(layerId)) {
-                result = data[layerId].Doors.Any((d) => d.To == toAlias && d.From == fromAlias);
+                result = data[layerId].Doors.Any((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
             }
             APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "reversed" : "not reversed")}");
             return result;
