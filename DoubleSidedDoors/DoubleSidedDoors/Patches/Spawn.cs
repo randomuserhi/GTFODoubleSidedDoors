@@ -13,7 +13,7 @@ namespace DoubleSidedDoors {
     public sealed class LayoutConfig {
         public uint LevelLayoutID { get; set; }
         public DoorIdentifier[] Doors { get; set; } = Array.Empty<DoorIdentifier>();
-        public DoorIdentifier[] DoorAlarmOverrides { get; set; } = Array.Empty<DoorIdentifier>();
+        public DoorIdentifier[] DoorLockedGraphicOverrides { get; set; } = Array.Empty<DoorIdentifier>();
         public DoorMessageOverride[] DoorMessageOverrides { get; set; } = Array.Empty<DoorMessageOverride>();
         public DoorTriggerOverride[] DoorOverrideTrigger { get; set; } = Array.Empty<DoorTriggerOverride>();
     }
@@ -22,6 +22,7 @@ namespace DoubleSidedDoors {
         public int To { get; set; }
         public int From { get; set; } = -1;
         public string Text { get; set; } = "<color=red>BI-DIRECTIONAL ACCESS DISABLED</color>";
+        public string State { get; set; } = "";
     }
 
     public sealed class DoorMessageOverride {
@@ -127,10 +128,10 @@ namespace DoubleSidedDoors.Patches {
             return result;
         }
 
-        private static bool alarm(uint layerId, int fromAlias, int toAlias) {
+        private static bool graphic(uint layerId, int fromAlias, int toAlias) {
             bool result = false;
             if (data.ContainsKey(layerId)) {
-                result = data[layerId].DoorAlarmOverrides.Any((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
+                result = data[layerId].DoorLockedGraphicOverrides.Any((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
             }
             APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "override handle light" : "leave handle light")}");
             return result;
@@ -228,18 +229,6 @@ namespace DoubleSidedDoors.Patches {
             }
         }
 
-        [HarmonyPatch(typeof(LG_SecurityDoor_Locks), nameof(LG_SecurityDoor_Locks.OnDoorState))]
-        [HarmonyPrefix]
-        private static void Lock_OnDoorState(LG_SecurityDoor_Locks __instance, ref pDoorState state) {
-            uint layer = GetLayoutIdOfZone(__instance.m_door.Gate.m_linksFrom.m_zone);
-            int fromAlias = __instance.m_door.Gate.m_linksFrom.m_zone.Alias;
-            int toAlias = __instance.m_door.Gate.m_linksTo.m_zone.Alias;
-            if (!alarm(layer, fromAlias, toAlias)) return;
-            if (state.status != eDoorStatus.Closed_LockedWithChainedPuzzle) return;
-
-            state.status = eDoorStatus.Closed_LockedWithChainedPuzzle_Alarm;
-        }
-
         [HarmonyPatch(typeof(LG_Door_Graphics), nameof(LG_Door_Graphics.OnDoorState))]
         [HarmonyPrefix]
         private static void Graphic_OnDoorState(LG_Door_Graphics __instance, ref pDoorState state) {
@@ -248,10 +237,13 @@ namespace DoubleSidedDoors.Patches {
             uint layer = GetLayoutIdOfZone(door.Gate.m_linksFrom.m_zone);
             int fromAlias = door.Gate.m_linksFrom.m_zone.Alias;
             int toAlias = door.Gate.m_linksTo.m_zone.Alias;
-            if (!alarm(layer, fromAlias, toAlias)) return;
+            if (!graphic(layer, fromAlias, toAlias)) return;
             if (state.status != eDoorStatus.Closed_LockedWithChainedPuzzle) return;
 
-            state.status = eDoorStatus.Closed_LockedWithChainedPuzzle_Alarm;
+            DoorIdentifier structure = data[layer].DoorLockedGraphicOverrides.First((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
+            if (structure.State != string.Empty && Enum.TryParse<eDoorStatus>(structure.State, true, out eDoorStatus result)) {
+                state.status = result;
+            }
         }
 
         [HarmonyPatch(typeof(LG_SecurityDoor), nameof(LG_SecurityDoor.OnSyncDoorStatusChange))]
