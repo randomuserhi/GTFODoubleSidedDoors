@@ -279,7 +279,6 @@ namespace DoubleSidedDoors.Patches {
                         unlocked.gameObject.SetActive(false);
                     }
                 }
-                APILogger.Debug(result);
             }
         }
 
