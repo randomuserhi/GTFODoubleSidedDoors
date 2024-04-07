@@ -249,6 +249,7 @@ namespace DoubleSidedDoors.Patches {
             if (structure.State != string.Empty && Enum.TryParse<eDoorStatus>(structure.State, true, out eDoorStatus result)) {
                 state.status = result;
                 if (result == eDoorStatus.Destroyed) {
+                    // Note(randomuserhi): Cam instead patch setup and add key to m_graphicalModeLookup with correct objects to hide => See GraphicalModes and LG_Door_Graphics.m_graphicalModeLookup
                     Transform? scanActive = door.m_doorBladeCuller.transform.Find("securityDoor_8x4_tech/bottomDoor/Security_Display_ScanActive");
                     if (scanActive == null) {
                         door.m_doorBladeCuller.transform.Find("securityDoor_4x4_tech/rightDoor/Security_Display_ScanActive");
@@ -278,6 +279,7 @@ namespace DoubleSidedDoors.Patches {
                         unlocked.gameObject.SetActive(false);
                     }
                 }
+                APILogger.Debug(result);
             }
         }
 
