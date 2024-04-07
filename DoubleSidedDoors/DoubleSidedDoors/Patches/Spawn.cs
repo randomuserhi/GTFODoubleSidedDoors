@@ -238,11 +238,46 @@ namespace DoubleSidedDoors.Patches {
             int fromAlias = door.Gate.m_linksFrom.m_zone.Alias;
             int toAlias = door.Gate.m_linksTo.m_zone.Alias;
             if (!graphic(layer, fromAlias, toAlias)) return;
-            if (state.status != eDoorStatus.Closed_LockedWithChainedPuzzle || state.status != eDoorStatus.Closed_LockedWithChainedPuzzle_Alarm) return;
+            if (state.status != eDoorStatus.Closed_LockedWithChainedPuzzle &&
+                state.status != eDoorStatus.Closed_LockedWithChainedPuzzle_Alarm &&
+                state.status != eDoorStatus.Closed_LockedWithNoKey &&
+                state.status != eDoorStatus.Closed_LockedWithPowerGenerator &&
+                state.status != eDoorStatus.Closed_LockedWithBulkheadDC &&
+                state.status != eDoorStatus.Closed_LockedWithKeyItem) return;
 
             DoorIdentifier structure = data[layer].DoorLockedGraphicOverrides.First((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
             if (structure.State != string.Empty && Enum.TryParse<eDoorStatus>(structure.State, true, out eDoorStatus result)) {
                 state.status = result;
+                if (result == eDoorStatus.Destroyed) {
+                    Transform? scanActive = door.m_doorBladeCuller.transform.Find("securityDoor_8x4_tech/bottomDoor/Security_Display_ScanActive");
+                    if (scanActive == null) {
+                        door.m_doorBladeCuller.transform.Find("securityDoor_4x4_tech/rightDoor/Security_Display_ScanActive");
+                    }
+                    if (scanActive != null) {
+                        scanActive.gameObject.SetActive(false);
+                    }
+                    Transform? locked = door.m_doorBladeCuller.transform.Find("securityDoor_8x4_tech/bottomDoor/Security_Display_Locked");
+                    if (locked == null) {
+                        door.m_doorBladeCuller.transform.Find("securityDoor_4x4_tech/rightDoor/Security_Display_Locked");
+                    }
+                    if (locked != null) {
+                        locked.gameObject.SetActive(false);
+                    }
+                    Transform? lockedAlarm = door.m_doorBladeCuller.transform.Find("securityDoor_8x4_tech/bottomDoor/Security_Display_LockedAlarm");
+                    if (lockedAlarm == null) {
+                        door.m_doorBladeCuller.transform.Find("securityDoor_4x4_tech/rightDoor/Security_Display_LockedAlarm");
+                    }
+                    if (lockedAlarm != null) {
+                        lockedAlarm.gameObject.SetActive(false);
+                    }
+                    Transform? unlocked = door.m_doorBladeCuller.transform.Find("securityDoor_8x4_tech/bottomDoor/Security_Display_UnLocked");
+                    if (unlocked == null) {
+                        door.m_doorBladeCuller.transform.Find("securityDoor_4x4_tech/rightDoor/Security_Display_UnLocked");
+                    }
+                    if (unlocked != null) {
+                        unlocked.gameObject.SetActive(false);
+                    }
+                }
             }
         }
 
