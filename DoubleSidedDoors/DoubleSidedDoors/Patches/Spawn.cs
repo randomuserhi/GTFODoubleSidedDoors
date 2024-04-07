@@ -32,6 +32,8 @@ namespace DoubleSidedDoors {
     public sealed class DoorTriggerOverride {
         public DoorIdentifier? Door { get; set; }
         public DoorIdentifier? Target { get; set; }
+
+        public bool OpenOnTarget { get; set; } = false;
     }
 }
 
@@ -168,28 +170,58 @@ namespace DoubleSidedDoors.Patches {
             int fromAlias = __instance.Gate.m_linksFrom.m_zone.Alias;
             int toAlias = __instance.Gate.m_linksTo.m_zone.Alias;
             if (!overrideTriggerOG(layer, fromAlias, toAlias)) return;
-            if (state.status != eDoorStatus.ChainedPuzzleActivated) return;
 
             DoorTriggerOverride structure = data[layer].DoorOverrideTrigger.First((d) => d.Target != null && d.Target.To == toAlias && (d.Target.From == -1 || d.Target.From == fromAlias));
+            if (!structure.OpenOnTarget) {
+                if (state.status != eDoorStatus.ChainedPuzzleActivated) return;
 
-            if (structure.Door != null) {
-                if (structure.Door.From != fromAlias || structure.Door.To != toAlias) {
-                    if (doors.ContainsKey(structure.Door.From)) {
-                        if (doors[structure.Door.From].ContainsKey(structure.Door.To)) {
-                            LG_SecurityDoor linkedDoor = doors[structure.Door.From][structure.Door.To];
+                if (structure.Door != null) {
+                    if (structure.Door.From != fromAlias || structure.Door.To != toAlias) {
+                        if (doors.ContainsKey(structure.Door.From)) {
+                            if (doors[structure.Door.From].ContainsKey(structure.Door.To)) {
+                                LG_SecurityDoor linkedDoor = doors[structure.Door.From][structure.Door.To];
 
-                            linkedDoor.m_sync.AttemptDoorInteraction(eDoorInteractionType.ActivateChainedPuzzle);
+                                linkedDoor.m_sync.AttemptDoorInteraction(eDoorInteractionType.ActivateChainedPuzzle);
 
-                            __instance.m_locks.add_OnChainedPuzzleSolved((Action)(() => {
-                                linkedDoor.m_locks.ChainedPuzzleToSolve.AttemptInteract(eChainedPuzzleInteraction.Solve);
-                                pDoorState state = new pDoorState() {
-                                    status = eDoorStatus.Unlocked
-                                };
-                                linkedDoor.m_graphics.OnDoorState(state, false);
-                                linkedDoor.m_anim.OnDoorState(state, false);
-                                linkedDoor.m_locks.OnDoorState(state, false);
-                                linkedDoor.m_sync.Cast<LG_Door_Sync>().AttemptDoorInteraction(eDoorInteractionType.Unlock, 0, 0, default, null);
-                            }));
+                                __instance.m_locks.add_OnChainedPuzzleSolved((Action)(() => {
+                                    linkedDoor.m_locks.ChainedPuzzleToSolve.AttemptInteract(eChainedPuzzleInteraction.Solve);
+                                    pDoorState state = new pDoorState() {
+                                        status = eDoorStatus.Unlocked
+                                    };
+                                    linkedDoor.m_graphics.OnDoorState(state, false);
+                                    linkedDoor.m_anim.OnDoorState(state, false);
+                                    linkedDoor.m_locks.OnDoorState(state, false);
+                                    linkedDoor.m_sync.Cast<LG_Door_Sync>().AttemptDoorInteraction(eDoorInteractionType.Unlock, 0, 0, default, null);
+                                }));
+                            }
+                        }
+                    }
+                }
+            } else {
+                if (state.status != eDoorStatus.Open && state.status != eDoorStatus.Unlocked && state.status != eDoorStatus.ChainedPuzzleActivated) return;
+
+                if (structure.Door != null) {
+                    if (structure.Door.From != fromAlias || structure.Door.To != toAlias) {
+                        if (doors.ContainsKey(structure.Door.From)) {
+                            if (doors[structure.Door.From].ContainsKey(structure.Door.To)) {
+                                LG_SecurityDoor linkedDoor = doors[structure.Door.From][structure.Door.To];
+
+                                if (state.status == eDoorStatus.Open) {
+                                    linkedDoor.m_sync.AttemptDoorInteraction(eDoorInteractionType.Open);
+                                } else if (state.status == eDoorStatus.Unlocked) {
+                                    pDoorState unlockState = new pDoorState() {
+                                        status = eDoorStatus.Unlocked
+                                    };
+                                    linkedDoor.m_graphics.OnDoorState(unlockState, false);
+                                    linkedDoor.m_anim.OnDoorState(unlockState, false);
+                                } else if (state.status == eDoorStatus.ChainedPuzzleActivated) {
+                                    pDoorState unlockState = new pDoorState() {
+                                        status = eDoorStatus.ChainedPuzzleActivated
+                                    };
+                                    linkedDoor.m_graphics.OnDoorState(unlockState, false);
+                                    linkedDoor.m_anim.OnDoorState(unlockState, false);
+                                }
+                            }
                         }
                     }
                 }
