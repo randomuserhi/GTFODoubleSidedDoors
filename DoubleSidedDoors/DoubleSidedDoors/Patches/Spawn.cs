@@ -129,22 +129,6 @@ namespace DoubleSidedDoors.Patches {
             return dimension.DimensionData.LevelLayoutData;
         }
 
-        private static bool bind(uint layerId, int fromAlias, int toAlias, out List<int> slots) {
-            slots = new List<int>();
-            bool result = false;
-            if (data.ContainsKey(layerId)) {
-                foreach (BindDoorToPlayer bind in data[layerId].BindDoorToPlayer) {
-                    DoorIdentifier? d = bind.Door;
-                    if (d != null && d.To == toAlias && (d.From == -1 || d.From == fromAlias)) {
-                        slots.Add(bind.Slot);
-                        result = true;
-                    }
-                }
-            }
-            APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "bound" : "not bound")}");
-            return result;
-        }
-
         private static bool reverse(uint layerId, int fromAlias, int toAlias) {
             bool result = false;
             if (data.ContainsKey(layerId)) {
@@ -401,6 +385,7 @@ namespace DoubleSidedDoors.Patches {
             reversedSecDoors.Clear();
             reversedGates.Clear();
             doors.Clear();
+            boundDoors.Clear();
         }
 
         [HarmonyPatch(typeof(ChainedPuzzleManager), nameof(ChainedPuzzleManager.CreatePuzzleInstance), new Type[] {
@@ -511,17 +496,35 @@ namespace DoubleSidedDoors.Patches {
                 if (!playerAgent.Alive && boundDoors.ContainsKey(playerAgent.PlayerSlotIndex)) {
                     bool allOpen = true;
                     foreach (LG_SecurityDoor door in boundDoors[playerAgent.PlayerSlotIndex]) {
-                        if (door.m_lastState.status != eDoorStatus.Open) {
+                        APILogger.Debug($"{playerAgent.PlayerSlotIndex} -> {door.Gate.m_linksTo.m_zone.Alias} {door.LastStatus}");
+                        if (door.LastStatus != eDoorStatus.Open) {
                             allOpen = false;
                             break;
                         }
                     }
                     if (!allOpen) {
+                        APILogger.Debug($"{playerAgent.PlayerSlotIndex} -> end run");
                         __result = true;
                         return;
                     }
                 }
             }
+        }
+
+        private static bool bind(uint layerId, int fromAlias, int toAlias, out List<int> slots) {
+            slots = new List<int>();
+            bool result = false;
+            if (data.ContainsKey(layerId)) {
+                foreach (BindDoorToPlayer bind in data[layerId].BindDoorToPlayer) {
+                    DoorIdentifier? d = bind.Door;
+                    if (d != null && d.To == toAlias && (d.From == -1 || d.From == fromAlias)) {
+                        slots.Add(bind.Slot);
+                        result = true;
+                    }
+                }
+            }
+            APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "bound" : "not bound")}");
+            return result;
         }
 
         [HarmonyPatch(typeof(LG_SecurityDoor), nameof(LG_SecurityDoor.Setup))]
