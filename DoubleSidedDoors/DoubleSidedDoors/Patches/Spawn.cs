@@ -13,9 +13,15 @@ namespace DoubleSidedDoors {
     public sealed class LayoutConfig {
         public uint LevelLayoutID { get; set; }
         public DoorIdentifier[] Doors { get; set; } = Array.Empty<DoorIdentifier>();
+        public BindDoorToPlayer[] BindDoorToPlayer { get; set; } = Array.Empty<BindDoorToPlayer>();
         public DoorIdentifier[] DoorLockedGraphicOverrides { get; set; } = Array.Empty<DoorIdentifier>();
         public DoorMessageOverride[] DoorMessageOverrides { get; set; } = Array.Empty<DoorMessageOverride>();
         public DoorTriggerOverride[] DoorOverrideTrigger { get; set; } = Array.Empty<DoorTriggerOverride>();
+    }
+
+    public sealed class BindDoorToPlayer {
+        public int Slot { get; set; }
+        public DoorIdentifier? Door { get; set; }
     }
 
     public sealed class DoorIdentifier {
@@ -78,6 +84,10 @@ namespace DoubleSidedDoors.Patches {
             if (!SNetwork.SNet.IsMaster) return;
 
             EnemyAgent enemy = __instance.m_owner;
+            switch (enemy.Locomotion.m_currentState.m_stateEnum) {
+            case ES_StateEnum.Hibernate:
+                return;
+            }
             if (!IsTargetReachable(enemy.CourseNode, __instance.m_targetRef.m_agent.CourseNode)) {
                 int index = UnityEngine.Random.RandomRangeInt(0, PlayerManager.PlayerAgentsInLevel.Count);
                 PlayerAgent selected = PlayerManager.PlayerAgentsInLevel[index];
@@ -117,6 +127,22 @@ namespace DoubleSidedDoors.Patches {
                 };
             }
             return dimension.DimensionData.LevelLayoutData;
+        }
+
+        private static bool bind(uint layerId, int fromAlias, int toAlias, out List<int> slots) {
+            slots = new List<int>();
+            bool result = false;
+            if (data.ContainsKey(layerId)) {
+                foreach (BindDoorToPlayer bind in data[layerId].BindDoorToPlayer) {
+                    DoorIdentifier? d = bind.Door;
+                    if (d != null && d.To == toAlias && (d.From == -1 || d.From == fromAlias)) {
+                        slots.Add(bind.Slot);
+                        result = true;
+                    }
+                }
+            }
+            APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "bound" : "not bound")}");
+            return result;
         }
 
         private static bool reverse(uint layerId, int fromAlias, int toAlias) {
@@ -474,9 +500,40 @@ namespace DoubleSidedDoors.Patches {
             return false;
         }
 
+        private static Dictionary<int, HashSet<LG_SecurityDoor>> boundDoors = new Dictionary<int, HashSet<LG_SecurityDoor>>();
+        [HarmonyPatch(typeof(WardenObjectiveManager), nameof(WardenObjectiveManager.CheckExpeditionFailed))]
+        [HarmonyPostfix]
+        private static void CheckExpeditionFailed(WardenObjectiveManager __instance, ref bool __result) {
+            if (__result == true) return;
+
+            for (int i = 0; i < PlayerManager.PlayerAgentsInLevel.Count; i++) {
+                PlayerAgent playerAgent = PlayerManager.PlayerAgentsInLevel[i];
+                if (!playerAgent.Alive && boundDoors.ContainsKey(playerAgent.PlayerSlotIndex)) {
+                    bool allOpen = true;
+                    foreach (LG_SecurityDoor door in boundDoors[playerAgent.PlayerSlotIndex]) {
+                        if (door.m_lastState.status != eDoorStatus.Open) {
+                            allOpen = false;
+                            break;
+                        }
+                    }
+                    if (!allOpen) {
+                        __result = true;
+                        return;
+                    }
+                }
+            }
+        }
+
         [HarmonyPatch(typeof(LG_SecurityDoor), nameof(LG_SecurityDoor.Setup))]
         [HarmonyPostfix]
         private static void SecDoor_Setup(LG_SecurityDoor __instance, LG_Gate gate) {
+            if (bind(GetLayoutIdOfZone(gate.m_linksFrom.m_zone), gate.m_linksFrom.m_zone.Alias, gate.m_linksTo.m_zone.Alias, out List<int> slots)) {
+                foreach (int slot in slots) {
+                    if (!boundDoors.ContainsKey(slot)) boundDoors.Add(slot, new HashSet<LG_SecurityDoor>());
+                    boundDoors[slot].Add(__instance);
+                }
+            }
+
             if (!reverse(GetLayoutIdOfZone(gate.m_linksFrom.m_zone), gate.m_linksFrom.m_zone.Alias, gate.m_linksTo.m_zone.Alias)) return;
 
             Transform crossing = __instance.transform.Find("crossing");
