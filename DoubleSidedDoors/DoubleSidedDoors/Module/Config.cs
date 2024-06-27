@@ -2,6 +2,7 @@
 using BepInEx;
 using BepInEx.Configuration;
 using DoubleSidedDoors.Patches;
+using MTFO.API;
 
 namespace DoubleSidedDoors.BepInEx {
     public static partial class ConfigManager {
@@ -17,7 +18,7 @@ namespace DoubleSidedDoors.BepInEx {
                 false,
                 "Enables debug messages when true.");
 
-            DirectoryInfo dir = Directory.CreateDirectory(Path.Combine(Paths.PluginPath, "DoubleSidedDoors"));
+            DirectoryInfo dir = Directory.CreateDirectory(Path.Combine(MTFOPathAPI.CustomPath, "DoubleSidedDoors"));
             FileInfo[] files = dir.GetFiles();
             APILogger.Debug($"Searching: {dir.FullName}", true);
             foreach (FileInfo fileInfo in files) {

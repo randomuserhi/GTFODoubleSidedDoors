@@ -14,6 +14,8 @@
 		<BuildDirectory>E:\GTFO mods\BepInEx\Plugins\$(SolutionName)\</BuildDirectory>
 		<OutputPath>$(BuildDirectory)</OutputPath>
 		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<PlatformTarget>x64</PlatformTarget>
+		<Platforms>AnyCPU;x64</Platforms>
 	</PropertyGroup>
 
 	<Target Name="PostBuild" BeforeTargets="PostBuildEvent">
@@ -21,6 +23,7 @@
 	</Target>
 
 	<ItemGroup>
+		<Reference Include="$(AdditionalIncludes)\MTFO\MTFO.dll" Private="false" />
 		<Reference Include="$(BepInEx)\core\0Harmony.dll" Private="false" />
 		<Reference Include="$(BepInEx)\core\BepInEx.Core.dll" Private="false" />
 		<Reference Include="$(BepInEx)\core\BepInEx.Unity.IL2CPP.dll" Private="false" />

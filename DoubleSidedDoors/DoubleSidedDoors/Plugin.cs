@@ -6,6 +6,7 @@ using HarmonyLib;
 namespace DoubleSidedDoors.BepInEx;
 
 [BepInPlugin(Module.GUID, Module.Name, Module.Version)]
+[BepInDependency(MTFO.MTFO.GUID, BepInDependency.DependencyFlags.HardDependency)]
 public class Plugin : BasePlugin {
     public override void Load() {
         APILogger.Log("Plugin is loaded!");

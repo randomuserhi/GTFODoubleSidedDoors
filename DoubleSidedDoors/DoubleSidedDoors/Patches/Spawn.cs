@@ -8,6 +8,7 @@ using LevelGeneration;
 using Player;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using static SurvivalWave;
 
 namespace DoubleSidedDoors {
     public sealed class LayoutConfig {
@@ -48,6 +49,7 @@ namespace DoubleSidedDoors.Patches {
     [HarmonyPatch]
     internal static class Spawn {
         private static bool IsTargetReachable(AIG_CourseNode source, AIG_CourseNode target) {
+            if (source == null || target == null) return false;
             if (source.NodeID == target.NodeID) return true;
 
             AIG_SearchID.IncrementSearchID();
@@ -84,6 +86,7 @@ namespace DoubleSidedDoors.Patches {
             if (!SNetwork.SNet.IsMaster) return;
 
             EnemyAgent enemy = __instance.m_owner;
+            if (enemy.CourseNode == null || __instance.m_targetRef == null) return;
             switch (enemy.Locomotion.m_currentState.m_stateEnum) {
             case ES_StateEnum.Hibernate:
                 return;
@@ -98,8 +101,56 @@ namespace DoubleSidedDoors.Patches {
                 patch = false;
                 enemy.AI.SetTarget(selected);
                 patch = true;
-                APILogger.Debug("unreachable");
-            } else APILogger.Debug("reachable");
+            }
+        }
+
+        // FromElevatorDirectionFix
+        [HarmonyPatch(typeof(SurvivalWave), nameof(SurvivalWave.GetScoredSpawnPoint_FromElevator))]
+        [HarmonyPrefix]
+        private static bool GetScoredSpawnPoint_FromElevator(SurvivalWave __instance, ref ScoredSpawnPoint __result) {
+            AIG_CourseNode startCourseNode = __instance.m_courseNode.m_dimension.GetStartCourseNode();
+            AIG_CourseNode? courseNode = null;
+
+            // find first reachable player
+            foreach (PlayerAgent player in PlayerManager.PlayerAgentsInLevel) {
+                if (IsTargetReachable(startCourseNode, player.m_courseNode)) {
+                    courseNode = player.m_courseNode;
+                    break;
+                }
+            }
+            if (courseNode == null) return true;
+
+            Vector3 normalized = (startCourseNode.Position - courseNode.Position).normalized;
+            normalized.y = 0f;
+            Il2CppSystem.Collections.Generic.List<ScoredSpawnPoint> availableSpawnPointsBetweenElevatorAndNode = __instance.GetAvailableSpawnPointsBetweenElevatorAndNode(courseNode);
+            ScoredSpawnPoint scoredSpawnPoint = new ScoredSpawnPoint {
+                totalCost = float.MinValue
+            };
+            Vector3 position = courseNode.Position;
+            float num = 1f;
+            float num2 = 4f - num;
+            for (int i = 0; i < availableSpawnPointsBetweenElevatorAndNode.Count; i++) {
+                ScoredSpawnPoint scoredSpawnPoint2 = availableSpawnPointsBetweenElevatorAndNode[i];
+                Vector3 vector = scoredSpawnPoint2.firstCoursePortal.Position - position;
+                vector.y = 0f;
+                vector.Normalize();
+                scoredSpawnPoint2.m_dir = vector;
+                scoredSpawnPoint2.totalCost = Mathf.Clamp01(Vector3.Dot(vector, normalized));
+                if (scoredSpawnPoint2.pathHeat > num - 0.01f) {
+                    scoredSpawnPoint2.totalCost += 1f + (1f - Mathf.Clamp(scoredSpawnPoint2.pathHeat - num, 0f, num2) / num2);
+                }
+                if (scoredSpawnPoint == null) {
+                    scoredSpawnPoint = scoredSpawnPoint2;
+                } else if (scoredSpawnPoint2.totalCost > scoredSpawnPoint.totalCost) {
+                    scoredSpawnPoint = scoredSpawnPoint2;
+                }
+            }
+            if (scoredSpawnPoint.courseNode == null) {
+                scoredSpawnPoint.courseNode = courseNode;
+            }
+            __result = scoredSpawnPoint;
+
+            return false;
         }
 
         public static Dictionary<uint, LayoutConfig> data = new Dictionary<uint, LayoutConfig>();
@@ -378,12 +429,14 @@ namespace DoubleSidedDoors.Patches {
 
         private static HashSet<int> reversedSecDoors = new HashSet<int>();
         private static Dictionary<int, GameObject> reversedGates = new Dictionary<int, GameObject>();
+        private static Dictionary<int, LG_Area> reversedGenericTerminalItem = new Dictionary<int, LG_Area>();
 
         [HarmonyPatch(typeof(ElevatorRide), nameof(ElevatorRide.StartElevatorRide))]
         [HarmonyPostfix]
         private static void StartElevatorRide() {
             reversedSecDoors.Clear();
             reversedGates.Clear();
+            reversedGenericTerminalItem.Clear();
             doors.Clear();
             boundDoors.Clear();
         }
@@ -578,6 +631,18 @@ namespace DoubleSidedDoors.Patches {
 
             reversedSecDoors.Add(__instance.transform.GetInstanceID());
             reversedGates.Add(gate.GetInstanceID(), backInteractionMessage);
+            reversedGenericTerminalItem.Add(__instance.m_terminalItem.Cast<LG_GenericTerminalItem>().GetInstanceID(), gate.m_linksTo);
+        }
+
+        [HarmonyPatch(typeof(LG_GenericTerminalItem), nameof(LG_GenericTerminalItem.SpawnNode), MethodType.Setter)]
+        [HarmonyPostfix]
+        private static void Postfix_Set_SpawnNode(LG_GenericTerminalItem __instance) {
+            int instance = __instance.GetInstanceID();
+            if (reversedGenericTerminalItem.ContainsKey(instance)) {
+                LG_Area area = reversedGenericTerminalItem[instance];
+                __instance.FloorItemLocation = area.m_zone.NavInfo.GetFormattedText(LG_NavInfoFormat.Full_And_Number_With_Underscore);
+                __instance.m_spawnNode = area.m_courseNode;
+            }
         }
     }
 }
