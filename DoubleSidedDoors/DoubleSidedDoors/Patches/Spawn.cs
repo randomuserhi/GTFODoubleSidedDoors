@@ -1,7 +1,6 @@
 ﻿using AIGraph;
 using API;
 using ChainedPuzzles;
-using Enemies;
 using GameData;
 using HarmonyLib;
 using LevelGeneration;
@@ -14,6 +13,7 @@ namespace DoubleSidedDoors {
     public sealed class LayoutConfig {
         public uint LevelLayoutID { get; set; }
         public DoorIdentifier[] Doors { get; set; } = Array.Empty<DoorIdentifier>();
+        public DoorIdentifier[] AddHandle { get; set; } = Array.Empty<DoorIdentifier>();
         public BindDoorToPlayer[] BindDoorToPlayer { get; set; } = Array.Empty<BindDoorToPlayer>();
         public DoorIdentifier[] DoorLockedGraphicOverrides { get; set; } = Array.Empty<DoorIdentifier>();
         public DoorMessageOverride[] DoorMessageOverrides { get; set; } = Array.Empty<DoorMessageOverride>();
@@ -75,33 +75,6 @@ namespace DoubleSidedDoors.Patches {
             }
 
             return false;
-        }
-
-        // Aggro fix
-        private static bool patch = true;
-        [HarmonyPatch(typeof(EnemyCourseNavigation), nameof(EnemyCourseNavigation.UpdateTracking))]
-        [HarmonyPostfix]
-        private static void UpdateTracking(EnemyCourseNavigation __instance) {
-            if (!patch) return;
-            if (!SNetwork.SNet.IsMaster) return;
-
-            EnemyAgent enemy = __instance.m_owner;
-            if (enemy.CourseNode == null || __instance.m_targetRef == null) return;
-            switch (enemy.Locomotion.m_currentState.m_stateEnum) {
-            case ES_StateEnum.Hibernate:
-                return;
-            }
-            if (!IsTargetReachable(enemy.CourseNode, __instance.m_targetRef.m_agent.CourseNode)) {
-                int index = UnityEngine.Random.RandomRangeInt(0, PlayerManager.PlayerAgentsInLevel.Count);
-                PlayerAgent selected = PlayerManager.PlayerAgentsInLevel[index];
-                while (PlayerManager.PlayerAgentsInLevel.Count != 1 && selected.GetInstanceID() == __instance.m_targetRef.m_agent.GetInstanceID()) {
-                    index = (index + 1) % PlayerManager.PlayerAgentsInLevel.Count;
-                    selected = PlayerManager.PlayerAgentsInLevel[index];
-                }
-                patch = false;
-                enemy.AI.SetTarget(selected);
-                patch = true;
-            }
         }
 
         // FromElevatorDirectionFix
@@ -186,6 +159,15 @@ namespace DoubleSidedDoors.Patches {
                 result = data[layerId].Doors.Any((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
             }
             APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "reversed" : "not reversed")}");
+            return result;
+        }
+
+        private static bool doubleHandle(uint layerId, int fromAlias, int toAlias) {
+            bool result = false;
+            if (data.ContainsKey(layerId)) {
+                result = data[layerId].AddHandle.Any((d) => d.To == toAlias && (d.From == -1 || d.From == fromAlias));
+            }
+            APILogger.Debug($"layerId: {layerId}, fromAlias: {fromAlias}, toAlias: {toAlias} -> {(result ? "doubleHandle" : "not doubleHandle")}");
             return result;
         }
 
@@ -590,11 +572,14 @@ namespace DoubleSidedDoors.Patches {
                 }
             }
 
-            if (!reverse(GetLayoutIdOfZone(gate.m_linksFrom.m_zone), gate.m_linksFrom.m_zone.Alias, gate.m_linksTo.m_zone.Alias)) return;
+            bool flip = reverse(GetLayoutIdOfZone(gate.m_linksFrom.m_zone), gate.m_linksFrom.m_zone.Alias, gate.m_linksTo.m_zone.Alias);
+            bool dHandle = doubleHandle(GetLayoutIdOfZone(gate.m_linksFrom.m_zone), gate.m_linksFrom.m_zone.Alias, gate.m_linksTo.m_zone.Alias);
+
+            if (!flip && !dHandle) return;
 
             Transform crossing = __instance.transform.Find("crossing");
             if (crossing == null) return;
-            crossing.localRotation *= Quaternion.Euler(0, 180, 0);
+            if (flip) crossing.localRotation *= Quaternion.Euler(0, 180, 0);
 
             Transform capBack = __instance.m_doorBladeCuller.transform.Find("securityDoor_8x4_tech/bottomDoor/g_securityDoor_bottomDoor_capback");
             if (capBack == null) {
