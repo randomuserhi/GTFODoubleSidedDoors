@@ -610,7 +610,13 @@ namespace DoubleSidedDoors.Patches {
             backInteractionMessage.transform.position = backHandle.transform.position;
             Interact_MessageOnScreen message = backInteractionMessage.GetComponent<Interact_MessageOnScreen>();
             message.MessageType = eMessageOnScreenType.InteractionPrompt;
-            message.m_message = data[GetLayoutIdOfZone(gate.m_linksFrom.m_zone)].Doors.First((d) => d.To == gate.m_linksTo.m_zone.Alias && (d.From == -1 || d.From == gate.m_linksFrom.m_zone.Alias)).Text;
+            if (flip) {
+                message.m_message = data[GetLayoutIdOfZone(gate.m_linksFrom.m_zone)].Doors.First((d) => d.To == gate.m_linksTo.m_zone.Alias && (d.From == -1 || d.From == gate.m_linksFrom.m_zone.Alias)).Text;
+            } else if (dHandle) {
+                message.m_message = data[GetLayoutIdOfZone(gate.m_linksFrom.m_zone)].AddHandle.First((d) => d.To == gate.m_linksTo.m_zone.Alias && (d.From == -1 || d.From == gate.m_linksFrom.m_zone.Alias)).Text;
+            } else {
+                message.m_message = "@randomuserhi YOU DON FUCKED UP!";
+            }
             backInteractionMessage.SetActive(true);
             message.SetActive(true);
 
